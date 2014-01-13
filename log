@@ -1,0 +1,12 @@
+19:07:45 web.1  | started with pid 2149
+19:07:45 web.1  | Tokenym Server listening on port 5000
+19:07:45 web.1  | Failed to connect to db. Did you remember to start mongod?
+SIGINT received
+19:08:35 web.1  | started with pid 2182
+19:08:35 web.1  | Tokenym Server listening on port 5000
+19:08:35 web.1  | Failed to connect to db. Did you remember to start mongod?
+SIGINT received
+19:08:51 web.1  | started with pid 2237
+19:08:51 web.1  | Tokenym Server listening on port 5000
+19:08:51 web.1  | Failed to connect to db. Did you remember to start mongod?
+SIGTERM received

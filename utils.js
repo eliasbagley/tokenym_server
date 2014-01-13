@@ -4,26 +4,34 @@ var crypto = require("crypto");
 var possible = "abcdefghijklmnopqrstuvwxyz0123456789";
 exports.possible = possible;
 
-// choose num random characters from string, returns an array of removed characters of num length
-exports.choose = function choose(string, num) {
-    if (num >= string.length) {
-        throw 'Bad arguments';
+
+/* Given a hash, pin length, and n1 and n2, returns an array containing
+ * the pin pulled from a random spot in the hash, and the id constructed from removing the
+ * hash and n1 chars to the left of the pin string, and n2 chars to the right
+ * of the pin string
+ *
+ * example: ['abcdefg', '1234'] = utils.createPinAndId('abcxx1234xxxdefg', 4, 2, 3)
+ */
+exports.createPinAndId = function createPinAndId(hash, pinLength, n1, n2) {
+    if (hash.length <= pinLength + n1 + n2) {
+        throw 'Hash length must be longer then pin and n1 and n2'
     }
 
-    var rand_index = Math.floor(Math.random()*string.length/2+string.length/4);
-    var chars = string.slice(rand_index, rand_index+num);
+    var i = Math.floor(Math.random()*(hash.length-pinLength-n1-n2) + n1);
+    var pin = hash.slice(i, i+pinLength);
+    var id = hash.replace(hash.substring(i-n1, i+pinLength+n2), "");
 
-    return chars;
+    return [id, pin];
 }
 
 // returns string with the first instance of each character in char_arr removed
-exports.remove_chars = function remove_chars(string, chars) {
+exports.remove_chars = function remove_chars(hash, pin, n1, n2) {
     if (string.length < chars.length) {
         throw 'Bad arguments';
     }
 
     var i = string.search(chars);
-    string = string.replace(string.substring(i-3, i+chars.length+3), "");
+    string = string.replace(string.substring(i-n1, i+pin.length+n2), "");
 
     return string;
 }
@@ -93,6 +101,6 @@ var shuffleString = function shuffleString(string) {
 exports.shuffleString = shuffleString;
 
 // generates a random on screen keyboard
-exports.gen_keyboard = function gen_keyboard() {
+exports.generateKeyboard = function generateKeyboard() {
     return shuffleString(possible);
 }

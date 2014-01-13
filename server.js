@@ -11,7 +11,11 @@ app.use(express.bodyParser());
 var dburl = 'mongodb://localhost/tokenym';
 
 mongoose.connect(dburl, function(err, res) {
-    console.log("connected to db");
+    if (err) {
+        console.log("Failed to connect to db. Did you remember to start mongod?");
+    } else {
+        console.log("Connected to db");
+    }
 });
 
 var userSchema = new mongoose.Schema({
@@ -31,6 +35,11 @@ var userSchema = new mongoose.Schema({
     balance: {
         type: Number,
         default: 100
+    },
+    // the last keyboard they requested. Gets reset after a successful login
+    keyboard: {
+        type: String,
+        trim: true
     }
 });
 
@@ -54,6 +63,11 @@ var Token = mongoose.model("Tokens", tokenSchema);
 
 var port = 5000;
 
+// magic numbers
+var pinLength = 4;
+var n1 = 2;
+var n2 = 3;
+
 // API:
 //register(email, password), sends email containing grid + 4 chars
 // H(password), subtract 6 characters, 4 of which are pin
@@ -63,6 +77,23 @@ app.post('/register', function(req, res) {
     var email = req.body.email;
     var password = req.body.password;
 
+    //check that the email address doesn't already exist in the db
+    var query = User.find({
+        "email": email
+    });
+    var user;
+    query.exec(function(err, results) {
+        if (err) {
+            res.send("error in query")
+        } else {
+            if (results.length > 0) {
+                res.send("email address taken");
+            }
+        }
+    })
+
+    //TODO email user with access code to complete registration
+
     // bcrypt hash the password
     var hashAndSalt = bcrypt.hashSync(password);
     console.log(hashAndSalt);
@@ -71,11 +102,11 @@ app.post('/register', function(req, res) {
     var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
     console.log(hash);
 
-    // remove random characters from the bcrypt hash, 4 of which become the pin
-    var pin = utils.choose(hash, 4);
-
-    // generate the ID, which is the remainder from the previous step
-    var id = utils.remove_chars(hash, pin);
+    // generate the pin and Id form the hash and magic numbers
+    var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
+    var pin = idAndPinArr[1];
+    console.log(pin);
+    var id = idAndPinArr[0];
 
     // generate a grid
     var g = new grid.Grid();
@@ -101,17 +132,52 @@ app.post('/register', function(req, res) {
     });
 
     // send the pin and grid to the email address
-    utils.email(email, grid, pin);
+    //utils.email(email, grid, pin);
 
     console.log("done registering!");
 });
+
+// request a random keyboard with an email address. The keyboard will encode
+// the pin and be used to authenticate the user on each login attempt
+app.post('/requestkeyboard', function(req, res) {
+    var email = req.body.email;
+
+    var keyboard = utils.generateKeyboard();
+
+    // store the keyboard with the user object
+    var query = User.find({
+        "email": email
+    });
+    var user;
+    query.exec(function(err, results) {
+        if (err) {
+            res.send("error in query")
+        } else {
+            user = results[0];
+            user.keyboard = keyboard;
+
+            user.save(function(err) {
+                if (err) {
+                    res.send("Error saving keyboard for user");
+                    console.log("Error saving keyboard for user");
+                } else {
+                    console.log("User " + email + " updated with keyboard " + keyboard);
+                    // send the generated keyboard
+                    res.send(keyboard);
+                }
+            })
+
+        }
+    })
+})
 
 // login(username, password, xxxx), returns user_id api key
 app.post('/login', function(req, res) {
     var email = req.body.email;
     var password = req.body.password;
-    var pin = req.body.pin;
-    console.log("pin: " + pin);
+    var encryptedPin = req.body.pin;
+    var keyboard = req.body.keyboard;
+    console.log("encrypted pin: " + encryptedPin);
 
     // lookup user from email
     var query = User.find({
@@ -125,14 +191,38 @@ app.post('/login', function(req, res) {
         } else {
             user = results[0];
             console.log("found user: " + user);
+
+            var userKeyboard = user.keyboard;
+
+            // the user has spend the generated keyboard from the last request, remove it from the user obj
+            user.keyboard = null;
+            user.save(function(err) {
+                if (err) {
+                    res.send("Error updating user object");
+                    console.log("Error updating user object");
+                } else {
+                    console.log("Successfully removed stale kb from user obj");
+                }
+            })
+
+            // verify that the keyboard matches the keyboard stored in user obj
+            if (keyboard != userKeyboard) {
+                res.send("Keyboards don't match")
+            }
+
+            // decode the pin using the keyboard and grid
+            var grid = user.grid;
+
+            var pin = grid.decode(encryptedPin, keyboard);
+
             var hashAndSalt = bcrypt.hashSync(password, user.salt);
             var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
-            var id = utils.remove_chars(hash, pin);
+            var id = utils.remove_chars(hash, pin, n1, n2);
             console.log("new id " + id);
             // compare the id's
             var same = true;
 
-            // prevents timing attacks
+            // fixed time comparison to prevent timing attacks
             var max_length = (user.id.length < id.length) ? user.id.length : id.length;
             for (var i = 0; i < max_length; ++i) {
                 if (user.id.length >= i && id.length >= i && user.id[i] != id[i]) {
@@ -146,7 +236,7 @@ app.post('/login', function(req, res) {
 
 // returns a new token for user_id
 // params: user_id
-app.post('/token/new', function(req, res) { // TODO update the user object's token balance
+app.post('/token/new', function(req, res) { //TODO update the user object's token balance
     var user_id = req.body.user_id;
     var shared_secret = req.body.shared_secret;
 
@@ -186,7 +276,7 @@ app.post('/token/redeem', function(req, res) {
     var shared_secret = req.body.shared_secret;
 
     var query = Token.find({
-        "token", token
+        "token": token
     });
     query.exec(function(err, results) {
         if (err) {
