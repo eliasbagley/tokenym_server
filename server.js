@@ -1,6 +1,7 @@
 var express = require("express");
 var mongoose = require("mongoose");
 var bcrypt = require("bcrypt-nodejs");
+var uuid = require("node-uuid");
 var utils = require("./utils");
 var grid = require("./Grid");
 
@@ -38,6 +39,9 @@ var userSchema = new mongoose.Schema({
     },
     // the last keyboard they requested. Gets reset after a successful login
     keyboard: {
+        type: String
+    },
+    api_key: {
         type: String,
         trim: true
     }
@@ -73,7 +77,7 @@ var n2 = 3;
 // H(password), subtract 6 characters, 4 of which are pin
 // create DB entry: email : user object containing email, grid, user_id api key, and id
 
-app.post('/register', function(req, res) {
+app.post('/user/register', function(req, res) {
     var email = req.body.email;
     var password = req.body.password;
 
@@ -96,11 +100,15 @@ app.post('/register', function(req, res) {
 
     // bcrypt hash the password
     var hashAndSalt = bcrypt.hashSync(password);
-    console.log(hashAndSalt);
+    console.log('Base64 hash and salt: ' + hashAndSalt);
     var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
-    console.log(salt);
+    console.log('Base64 salt: ' + salt);
     var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
-    console.log(hash);
+    console.log('Base64 hash: ' + hash);
+
+    // convert the base64 hash into hex
+    hash = utils.base64ToHex(hash);
+    console.log('Hex hash: ' + hash);
 
     // generate the pin and Id form the hash and magic numbers
     var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
@@ -110,6 +118,7 @@ app.post('/register', function(req, res) {
 
     // generate a grid
     var g = new grid.Grid();
+    console.log("Grid data: " + grid.data);
 
     // store the grid, email, id in the userSchema object
     console.log("grid data: " + g.data);
@@ -117,7 +126,8 @@ app.post('/register', function(req, res) {
         "email": email,
         "id": id,
         "grid": g,
-        "salt": salt
+        "salt": salt,
+        "api_key": null
     });
 
     console.log("saving user...");
@@ -127,7 +137,7 @@ app.post('/register', function(req, res) {
             console.log("error creating user");
         } else {
             res.send(user)
-            console.log("user saved");
+            console.log(user);
         }
     });
 
@@ -139,21 +149,26 @@ app.post('/register', function(req, res) {
 
 // request a random keyboard with an email address. The keyboard will encode
 // the pin and be used to authenticate the user on each login attempt
+
+//TODO check to suer if the user even exists first
 app.post('/requestkeyboard', function(req, res) {
     var email = req.body.email;
-
-    var keyboard = utils.generateKeyboard();
 
     // store the keyboard with the user object
     var query = User.find({
         "email": email
     });
+
     var user;
     query.exec(function(err, results) {
         if (err) {
             res.send("error in query")
         } else {
             user = results[0];
+
+            //TODO get the right size keyboard
+            var keyboard = utils.generateKeyboard(25);
+
             user.keyboard = keyboard;
 
             user.save(function(err) {
@@ -163,16 +178,15 @@ app.post('/requestkeyboard', function(req, res) {
                 } else {
                     console.log("User " + email + " updated with keyboard " + keyboard);
                     // send the generated keyboard
-                    res.send(keyboard);
+                    res.send({"keyboard" : keyboard});
                 }
             })
-
         }
     })
 })
 
 // login(username, password, xxxx), returns user_id api key
-app.post('/login', function(req, res) {
+app.post('/user/login', function(req, res) {
     var email = req.body.email;
     var password = req.body.password;
     var encryptedPin = req.body.pin;
@@ -207,7 +221,7 @@ app.post('/login', function(req, res) {
 
             // verify that the keyboard matches the keyboard stored in user obj
             if (keyboard != userKeyboard) {
-                res.send("Keyboards don't match")
+                res.send("Keyboards don't match") //TODO figure out how to send error code
             }
 
             // decode the pin using the keyboard and grid
@@ -217,6 +231,11 @@ app.post('/login', function(req, res) {
 
             var hashAndSalt = bcrypt.hashSync(password, user.salt);
             var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
+
+            // conver the base 64 hash into hex
+            hash = utils.base64ToHex(hash);
+            console.log('Hex hash: ' + hash);
+
             var id = utils.remove_chars(hash, pin, n1, n2);
             console.log("new id " + id);
             // compare the id's
@@ -229,16 +248,36 @@ app.post('/login', function(req, res) {
                     same = false;
                 }
             }
-            console.log(same);
+            if (same) {
+                // genereate uuid for apikey
+                var api_key = uuid.v4();
+                res.send(apikey);
+
+                // write the apikey to the apikey db
+                user.api_key = api_key;
+                user.save(function (err) {
+                    if (err) {
+                        console.log("Error updating apikey in database");
+                    } else {
+                        console.log("Successfully set apikey in database");
+                    }
+                })
+            }
+            else {
+                res.send("Incorrect username, password, or pin");
+            }
+
         }
     });
 });
 
 // returns a new token for user_id
 // params: user_id
-app.post('/token/new', function(req, res) { //TODO update the user object's token balance
+app.post('/token/request', function(req, res) { //TODO update the user object's token balance
     var user_id = req.body.user_id;
     var shared_secret = req.body.shared_secret;
+    var api_key = req.body.api_key;
+    var price = req.body.price; //TODO attack a price to the token
 
     var query = User.find({
         _id: req.params.id
@@ -248,6 +287,14 @@ app.post('/token/new', function(req, res) { //TODO update the user object's toke
             res.end('Error in query');
         } else {
             var user = results[0];
+
+            var user_api_key = user.api_key;
+
+            // invalid API key
+            if (user_api_key != api_key) {
+                res.send("Invalid API key");
+                console.log("Invalid API key");
+            }
 
             // create a token
             utils.generateToken(10, function(token) {
@@ -262,7 +309,7 @@ app.post('/token/new', function(req, res) { //TODO update the user object's toke
                         console.log("Error saving token");
                     } else {
                         // return created token to user
-                        res.send(token);
+                        res.send({"token" : token});
                     }
                 });
 
@@ -271,71 +318,88 @@ app.post('/token/new', function(req, res) { //TODO update the user object's toke
     });
 });
 
+// only a logged in user can redeem a token, because it requires an api key
 app.post('/token/redeem', function(req, res) {
+    var user_id = req.body.user_id;
+    var api_key = req.body.api_key;
     var token = req.body.token;
     var shared_secret = req.body.shared_secret;
 
-    var query = Token.find({
-        "token": token
+    var userQuery = User.find({
+        _id : user_id
     });
-    query.exec(function(err, results) {
+    userQuery.exec(function(err, results) {
         if (err) {
-            res.send('Error in query');
+            res.send("Invalid userId");
         } else {
-            var tokenObj = results[0];
+            var user = results[0];
 
-            if (shared_secret == tokenObj.secret) {
-                res.send(tokenObj.id);
-            } else {
-                res.send(null);
+            if (user.api_key != api_key) {
+                res.send("Invalid API key");
             }
 
-            // delete this tokenObj
-            Token.remove({
-                _id: tokenObj._id
-            }, function(err) {});
+            var query = Token.find({
+                "token": token
+            });
+            query.exec(function(err, results) {
+                if (err) {
+                    res.send('Error in query');
+                } else {
+                    var tokenObj = results[0];
+
+                    // if the shared secrets match
+                    if (shared_secret == tokenObj.secret) {
+                        // send the token's owner's id
+                        res.send({"id" : tokenObj.id});
+                    } else {
+                        // send nothing back if the shared secret doesn't match
+                        res.send("Shared secret doesn't match");
+                    }
+
+                    // delete this tokenObj
+                    Token.remove({
+                        _id: tokenObj._id
+                    }, function(err) {
+                        console.log("Error deleting token");
+                    });
+                }
+            });
         }
-    });
+    })
 });
 
-app.post('/user/create', function(req, res) {
-    var user = new User(req.body);
-    user.save(function(err) {
-        if (err) {
-            res.send('Error creating user')
-        } else {
-            res.send(user)
-        }
-    });
-});
+app.post('/user/logout', function(req, res) {
+    var user_id = req.body.user_id;
+    var api_key = req.body.api_key;
 
-app.delete('/user/:id', function(req, res) {
-    User.remove({
-        _id: req.params.id
-    }, function(err) {
-        if (err) {
-            res.send('error removing');
-        } else {
-            res.send('removed user: ' + req.params.id);
-        }
-    });
-});
-
-app.get('/user/:id', function(req, res) {
+    // delete the user's API key to log them out
     var query = User.find({
-        _id: req.params.id
+        _id : user_id
     });
-    query.where('age').lt(60);
     query.exec(function(err, results) {
         if (err) {
-            res.end('Error in query');
+            res.send("Error logging out");
         } else {
-            res.end(JSON.stringify(results[0], undefined, 2));
+            var user = results[0];
+
+            if (user.api_key != api_key) {
+                res.send("Invalid user id");
+            }
+
+            user.api_key = null;
+
+            user.save(function(err) {
+                if (err) {
+                    console.log("Error saving user object in logout");
+                    res.send("Logout unsuccessful");
+                } else {
+                    console.log("Successfully saved user object logging out");
+                    res.send("Logout successful");
+                }
+            });
         }
     });
-});
-
-
+})
 
 app.listen(port, function() {
     console.log('Tokenym Server listening on port ' + port);

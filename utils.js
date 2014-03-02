@@ -1,7 +1,8 @@
 var nodemailer = require("nodemailer");
 var crypto = require("crypto");
 
-var possible = "abcdefghijklmnopqrstuvwxyz0123456789";
+var possible = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+var hex_chars = "0123456789abcdef";
 exports.possible = possible;
 
 
@@ -12,10 +13,10 @@ exports.possible = possible;
  *
  * example: ['abcdefg', '1234'] = utils.createPinAndId('abcxx1234xxxdefg', 4, 2, 3)
  */
-exports.createPinAndId = function createPinAndId(hash, pinLength, n1, n2) {
-    if (hash.length <= pinLength + n1 + n2) {
-        throw 'Hash length must be longer then pin and n1 and n2'
-    }
+exports.createPinAndId = function createPinAndId(hash, pinLength) {
+    //TODO test this better
+    var n1 = Math.floor(Math.random()*7);
+    var n2 = Math.floor(Math.random()*7);
 
     var i = Math.floor(Math.random()*(hash.length-pinLength-n1-n2) + n1);
     var pin = hash.slice(i, i+pinLength);
@@ -100,7 +101,31 @@ var shuffleString = function shuffleString(string) {
 }
 exports.shuffleString = shuffleString;
 
+var randomChars = function getRandomChars(num) {
+    var shuffledChars = shuffleString(possible);
+    return shuffledChars.substring(0, num-1);
+}
+exports.getRandomChars = randomChars;
+
 // generates a random on screen keyboard
-exports.generateKeyboard = function generateKeyboard() {
-    return shuffleString(possible);
+exports.generateKeyboard = function generateKeyboard(length) {
+    if (length < hex_chars.length) {
+        throw 'Keyboard length cannot be less than the number of hex characters';
+    }
+
+    var unshuffledKeyboard = hex_chars;
+
+    // get it long enough to be the keyboard with the blanks
+    for (var i = 0; i < (length - hex_chars.length); i++) {
+        unshuffledKeyboard += " ";
+    }
+
+    var shuffledKeyboard = shuffleString(unshuffledKeyboard);
+    return shuffledKeyboard;
+}
+
+exports.base64ToHex = function base64ToHex(base64String) {
+    var buf = new Buffer(base64String, 'base64');
+    var hexString = buf.toString('hex');
+    return hexString;
 }

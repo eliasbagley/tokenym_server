@@ -1,15 +1,18 @@
 // Grid
 var utils = require("./utils");
 
-var Grid = exports.Grid = function() {
-    this.rows = 6;
-    this.cols = 6;
-    this.data = utils.shuffleString(utils.possible);
+var Grid = exports.Grid = function(rows, cols) {
+    this.rows = rows;
+    this.cols = cols;
+    this.data = function() {
+        var randomChars = utils.getRandomChars(rows*cols);
+        return randomChars;
+    }
     this.decode = function(encrypted, random_kb) {
         var decrypted = "";
-        for (var i = 0; i < encrypted; i++) {
-            var ind = random_kb.indexOf(encrypted[i]);
-            decrypted += this.data[ind];
+        for (var i = 0; i < encrypted.length; i++) {
+            var ind = this.data.indexOf(encrypted[i]);
+            decrypted += random_kb[ind];
         }
         return decrypted;
     };
