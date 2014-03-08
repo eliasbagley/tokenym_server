@@ -37,6 +37,20 @@ exports.remove_chars = function remove_chars(hash, pin, n1, n2) {
     return string;
 }
 
+// fixed time comparison to prevent timing attacks
+exports.secureCompareString = function secureCompareString(str1, str2) {
+    var same = true;
+    var max_length = (str1.length < str2.length) ? str1.length : str2.length;
+
+    for (var i = 0; i < max_length; ++i) {
+        if (str1.length >= i && str2.length >= i && str1[i] != str2[i]) {
+            same = false;
+        }
+    }
+
+    return same;
+}
+
 exports.email = function email(email, grid, pin) {
 
     var smtpTransport = nodemailer.createTransport("SMTP", {

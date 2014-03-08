@@ -44,6 +44,10 @@ var userSchema = new mongoose.Schema({
     api_key: {
         type: String,
         trim: true
+    },
+    hashAndSalt: {
+        type: String,
+        trim: true
     }
 });
 
@@ -71,6 +75,8 @@ var port = 5000;
 var pinLength = 4;
 var n1 = 2;
 var n2 = 3;
+var keyboardSize = 25;
+var tokenSize = 10;
 
 // API:
 //register(email, password), sends email containing grid + 4 chars
@@ -110,11 +116,12 @@ app.post('/user/register', function(req, res) {
     hash = utils.base64ToHex(hash);
     console.log('Hex hash: ' + hash);
 
-    // generate the pin and Id form the hash and magic numbers
+    // generate the pin and Id from the hash and magic numbers
     var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
     var pin = idAndPinArr[1];
     console.log(pin);
     var id = idAndPinArr[0];
+    console.log('id: ' + id);
 
     // generate a grid
     var g = new grid.Grid();
@@ -127,7 +134,8 @@ app.post('/user/register', function(req, res) {
         "id": id,
         "grid": g,
         "salt": salt,
-        "api_key": null
+        "api_key": null,
+        "hashAndSalt": hashAndSalt
     });
 
     console.log("saving user...");
@@ -147,16 +155,22 @@ app.post('/user/register', function(req, res) {
     console.log("done registering!");
 });
 
-// request a random keyboard with an email address. The keyboard will encode
+// request a random keyboard using the email address and password. The function
+// looks up the user corresponding to that email address and bcrypt hashed password. The keyboard will encrypt
 // the pin and be used to authenticate the user on each login attempt
+// Even if there is no user with found with the given email and password, a keyboard will be sent anyways so an attacker
+// cannot learn if credentails are correct
 
-//TODO check to suer if the user even exists first
-app.post('/requestkeyboard', function(req, res) {
+app.post('/keyboard/request', function(req, res) {
     var email = req.body.email;
+    var password = req.body.password;
+
+    var hashAndSalt = bcrypt.hashSync(password);
 
     // store the keyboard with the user object
     var query = User.find({
-        "email": email
+        "email"         : email,
+        "hashAndSalt"   : hashAndSalt
     });
 
     var user;
@@ -166,11 +180,18 @@ app.post('/requestkeyboard', function(req, res) {
         } else {
             user = results[0];
 
-            //TODO get the right size keyboard
-            var keyboard = utils.generateKeyboard(25);
+            var keyboard = utils.generateKeyboard(keyboardSize);
 
+            // send the keyboard even if there is no user
+            if (user == nil) {
+                res.send({"keyboard": keyboard});
+                console.log("sending kb even though user is null");
+            }
+
+            // set the current keyboard on the user object
             user.keyboard = keyboard;
 
+            // save the user object
             user.save(function(err) {
                 if (err) {
                     res.send("Error saving keyboard for user");
@@ -186,6 +207,7 @@ app.post('/requestkeyboard', function(req, res) {
 })
 
 // login(username, password, xxxx), returns user_id api key
+// TODO check to see if the user exists?
 app.post('/user/login', function(req, res) {
     var email = req.body.email;
     var password = req.body.password;
@@ -205,6 +227,11 @@ app.post('/user/login', function(req, res) {
         } else {
             user = results[0];
             console.log("found user: " + user);
+
+            if (user == null) {
+                res.send("Invalid username or password");
+                console.log("Invalid username or password");
+            }
 
             var userKeyboard = user.keyboard;
 
@@ -238,16 +265,10 @@ app.post('/user/login', function(req, res) {
 
             var id = utils.remove_chars(hash, pin, n1, n2);
             console.log("new id " + id);
-            // compare the id's
-            var same = true;
 
-            // fixed time comparison to prevent timing attacks
-            var max_length = (user.id.length < id.length) ? user.id.length : id.length;
-            for (var i = 0; i < max_length; ++i) {
-                if (user.id.length >= i && id.length >= i && user.id[i] != id[i]) {
-                    same = false;
-                }
-            }
+            // compare the id's
+            var same = utils.secureCompareString(user.id, id);
+
             if (same) {
                 // genereate uuid for apikey
                 var api_key = uuid.v4();
@@ -297,7 +318,7 @@ app.post('/token/request', function(req, res) { //TODO update the user object's 
             }
 
             // create a token
-            utils.generateToken(10, function(token) {
+            utils.generateToken(tokenSize, function(token) {
                 // store the token in the token db, token : id
                 var tokenObj = new Token({
                     "token": token,
