@@ -3,7 +3,7 @@ var mongoose = require("mongoose");
 var bcrypt = require("bcrypt-nodejs");
 var uuid = require("node-uuid");
 var utils = require("./utils");
-var grid = require("./Grid");
+var Grid = require("./Grid");
 
 var app = express();
 app.use(express.logger());
@@ -77,6 +77,8 @@ var n1 = 2;
 var n2 = 3;
 var keyboardSize = 25;
 var tokenSize = 10;
+var rows = 5;
+var cols = 5;
 
 // API:
 //register(email, password), sends email containing grid + 4 chars
@@ -119,13 +121,13 @@ app.post('/user/register', function(req, res) {
     // generate the pin and Id from the hash and magic numbers
     var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
     var pin = idAndPinArr[1];
-    console.log(pin);
+    console.log('pin: ' + pin);
     var id = idAndPinArr[0];
     console.log('id: ' + id);
 
     // generate a grid
-    var g = new grid.Grid();
-    console.log("Grid data: " + grid.data);
+    var g = new Grid(rows, cols);
+    console.log("Grid:" + g);
 
     // store the grid, email, id in the userSchema object
     console.log("grid data: " + g.data);
@@ -183,7 +185,7 @@ app.post('/keyboard/request', function(req, res) {
             var keyboard = utils.generateKeyboard(keyboardSize);
 
             // send the keyboard even if there is no user
-            if (user == nil) {
+            if (user == null) {
                 res.send({"keyboard": keyboard});
                 console.log("sending kb even though user is null");
             }
