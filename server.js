@@ -108,11 +108,6 @@ app.post('/user/register', function(req, res) {
 
     // bcrypt hash the password
     var hashAndSalt = bcrypt.hashSync(password);
-    console.log('Base64 hash and salt: ' + hashAndSalt);
-    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
-    console.log('Base64 salt: ' + salt);
-    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
-    console.log('Base64 hash: ' + hash);
 
     // convert the base64 hash into hex
     hash = utils.base64ToHex(hash);
@@ -140,7 +135,7 @@ app.post('/user/register', function(req, res) {
         "hashAndSalt": hashAndSalt
     });
 
-    console.log("saving user...");
+    console.log('saving user...');
     user.save(function(err) {
         if (err) {
             res.send('Error creating user');
@@ -154,8 +149,21 @@ app.post('/user/register', function(req, res) {
     // send the pin and grid to the email address
     //utils.email(email, grid, pin);
 
-    console.log("done registering!");
+    console.log("done registering!")
+
 });
+
+function parseHash(hashAndSalt) {
+    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
+    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
+
+    console.log("hash: " + hash + " salt: " + salt);
+
+    return [salt, hash];
+}
+
+function createId(hashAndSalt) {
+}
 
 // request a random keyboard using the email address and password. The function
 // looks up the user corresponding to that email address and bcrypt hashed password. The keyboard will encrypt
@@ -167,6 +175,7 @@ app.post('/keyboard/request', function(req, res) {
     var email = req.body.email;
     var password = req.body.password;
 
+    // make this async
     var hashAndSalt = bcrypt.hashSync(password);
 
     // store the keyboard with the user object
