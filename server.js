@@ -1,92 +1,60 @@
-var express = require("express");
+var express  = require("express");
 var mongoose = require("mongoose");
-var bcrypt = require("bcrypt-nodejs");
-var uuid = require("node-uuid");
-var utils = require("./utils");
-var Grid = require("./Grid");
+var bcrypt   = require("bcrypt-nodejs");
+var uuid     = require("node-uuid");
+var utils    = require("./utils");
+var Grid     = require("./Grid");
+var Q        = require("Q");
+var User     = require('./model/user.js');
+var Token    = require('./model/token.js');
+
+Q.longStackSupport = true;
 
 var app = express();
 app.use(express.logger());
 app.use(express.bodyParser());
 
-var dburl = 'mongodb://localhost/tokenym';
-
-mongoose.connect(dburl, function(err, res) {
-    if (err) {
-        console.log("Failed to connect to db. Did you remember to start mongod?");
-    } else {
-        console.log("Connected to db");
-    }
-});
-
-var userSchema = new mongoose.Schema({
-    email: {
-        type: String,
-        trim: true
-    },
-    id: {
-        type: String,
-        trim: true
-    },
-    grid: mongoose.Schema.Types.Mixed,
-    salt: {
-        type: String,
-        trim: true
-    },
-    balance: {
-        type: Number,
-        default: 100
-    },
-    // the last keyboard they requested. Gets reset after a successful login
-    keyboard: {
-        type: String
-    },
-    api_key: {
-        type: String,
-        trim: true
-    },
-    hashAndSalt: {
-        type: String,
-        trim: true
-    }
-});
-
-var tokenSchema = new mongoose.Schema({
-    token: {
-        type: String,
-        trim: true
-    },
-    id: {
-        type: String,
-        trim: true
-    },
-    secret: {
-        type: String,
-        trim: true
-    }
-});
-
-var User = mongoose.model("Users", userSchema);
-var Token = mongoose.model("Tokens", tokenSchema);
-
 var port = 5000;
 
 // magic numbers
-var pinLength = 4;
-var n1 = 2;
-var n2 = 3;
+var pinLength    = 4;
+var n1           = 2;
+var n2           = 3;
 var keyboardSize = 25;
-var tokenSize = 10;
-var rows = 5;
-var cols = 5;
+var tokenSize    = 10;
+var rows         = 5;
+var cols         = 5;
 
 // API:
 //register(email, password), sends email containing grid + 4 chars
 // H(password), subtract 6 characters, 4 of which are pin
 // create DB entry: email : user object containing email, grid, user_id api key, and id
 
+function createUser(email, password) {
+}
+
+function checkIfTaken(email ) {
+    //check that the email address doesn't already exist in the db
+    var query = User.find({
+        "email": email
+    });
+    var user;
+
+    Q.ninvoke(query, "exec")
+    .done(function(results) {
+        if (results.length > 0) {
+            res.end('email address taken');
+            console.log('Email address taken');
+        }
+    },
+    function (err) {
+        res.send("error in query")
+        console.log('Error in query: ' + err)
+    });
+}
+
 app.post('/user/register', function(req, res) {
-    var email = req.body.email;
+    var email    = req.body.email;
     var password = req.body.password;
 
     //check that the email address doesn't already exist in the db
@@ -94,57 +62,109 @@ app.post('/user/register', function(req, res) {
         "email": email
     });
     var user;
-    query.exec(function(err, results) {
-        if (err) {
-            res.send("error in query")
-        } else {
-            if (results.length > 0) {
-                res.send("email address taken");
-            }
+
+    checkIfTaken(email)
+    /*
+     *query.exec(function(err, results) {
+     *    if (err) {
+     *        res.send("error in query")
+     *        console.log('Error in query')
+     *    } else {
+     *        if (results.length > 0) {
+     *            res.end("email address taken");
+     *        }
+     *    }
+     *})
+     */
+    Q.ninvoke(query, "exec")
+    .done(function(results) {
+        if (results.length > 0) {
+            res.end('email address taken');
+            console.log('Email address taken');
+            return;
         }
-    })
+
+
+    },
+    function (err) {
+        res.send("error in query")
+        console.log('Error in query: ' + err)
+    });
 
     //TODO email user with access code to complete registration
-
-    // bcrypt hash the password
-    var hashAndSalt = bcrypt.hashSync(password);
-
-    // convert the base64 hash into hex
-    hash = utils.base64ToHex(hash);
-    console.log('Hex hash: ' + hash);
-
-    // generate the pin and Id from the hash and magic numbers
-    var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
-    var pin = idAndPinArr[1];
-    console.log('pin: ' + pin);
-    var id = idAndPinArr[0];
-    console.log('id: ' + id);
-
-    // generate a grid
-    var g = new Grid(rows, cols);
-    console.log("Grid:" + g);
-
-    // store the grid, email, id in the userSchema object
-    console.log("grid data: " + g.data);
-    var user = new User({
-        "email": email,
-        "id": id,
-        "grid": g,
-        "salt": salt,
-        "api_key": null,
-        "hashAndSalt": hashAndSalt
-    });
-
-    console.log('saving user...');
-    user.save(function(err) {
-        if (err) {
-            res.send('Error creating user');
-            console.log("error creating user");
-        } else {
-            res.send(user)
-            console.log(user);
+    //
+    Q.nfcall(query.exec)
+    .then(function () {
+        if (results.length > 0) {
+            return false;
         }
-    });
+        return true;
+    },
+    function (err) {
+        console.log('Error in user query');
+    })
+    .done(function(emailTaken) {
+        if (emailTaken) {
+            res.end('email address taken');
+            console.log('email address taken');
+            return;
+        }
+
+    })
+    // bcrypt hash the password
+    var bcrypt promise = Q.nfcall(bcrypt.hash, password, null, null);
+    .then(function onFinishedHashing(hashAndSalt) {
+        // separate hash and salt
+        var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
+        var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
+        console.log("hash: " + hash + " salt: " + salt);
+
+        // convert hash to hex
+        hash = utils.base64ToHex(hash);
+        console.log('Hex hash: ' + hash)
+
+        // generate the pin and Id from the hash and magic numbers
+        var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
+        var pin = idAndPinArr[1];
+        console.log('pin: ' + pin);
+        var id = idAndPinArr[0];
+        console.log('id: ' + id);
+
+        return [id, hashAndSalt];
+    })
+    .spread(function createUser(id, hashAndSalt){
+        // generate a grid
+        var g = new Grid(rows, cols);
+        console.log("Grid:" + g);
+
+        // store the grid, email, id in the userSchema object
+        var user = new User({
+            "email": email,
+            "id": id,
+            "grid": g,
+            "salt": null,
+            "api_key": null,
+            "hashAndSalt": hashAndSalt
+        });
+
+        return user;
+    })
+    .then (function saveUser(user) {
+        console.log('saving user...');
+
+        Q.ninvoke(user, "save")
+        .then(function() {
+            console.log("user %s has been saved", user._id)
+        },
+        function (err) {
+            console.log('Save failure: ' + err);
+        });
+
+    })
+    .catch(function(error) {
+        console.log('There was an error: ' + error);
+    })
+    .done();
 
     // send the pin and grid to the email address
     //utils.email(email, grid, pin);
@@ -153,16 +173,7 @@ app.post('/user/register', function(req, res) {
 
 });
 
-function parseHash(hashAndSalt) {
-    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
-    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
-
-    console.log("hash: " + hash + " salt: " + salt);
-
-    return [salt, hash];
-}
-
-function createId(hashAndSalt) {
+function saveUser(user){
 }
 
 // request a random keyboard using the email address and password. The function
@@ -220,10 +231,10 @@ app.post('/keyboard/request', function(req, res) {
 // login(username, password, xxxx), returns user_id api key
 // TODO check to see if the user exists?
 app.post('/user/login', function(req, res) {
-    var email = req.body.email;
-    var password = req.body.password;
+    var email        = req.body.email;
+    var password     = req.body.password;
     var encryptedPin = req.body.pin;
-    var keyboard = req.body.keyboard;
+    var keyboard     = req.body.keyboard;
     console.log("encrypted pin: " + encryptedPin);
 
     // lookup user from email
@@ -306,10 +317,10 @@ app.post('/user/login', function(req, res) {
 // returns a new token for user_id
 // params: user_id
 app.post('/token/request', function(req, res) { //TODO update the user object's token balance
-    var user_id = req.body.user_id;
+    var user_id       = req.body.user_id;
     var shared_secret = req.body.shared_secret;
-    var api_key = req.body.api_key;
-    var price = req.body.price; //TODO attack a price to the token
+    var api_key       = req.body.api_key;
+    var price         = req.body.price; //TODO attack a price to the token
 
     var query = User.find({
         _id: req.params.id
@@ -352,9 +363,9 @@ app.post('/token/request', function(req, res) { //TODO update the user object's 
 
 // only a logged in user can redeem a token, because it requires an api key
 app.post('/token/redeem', function(req, res) {
-    var user_id = req.body.user_id;
-    var api_key = req.body.api_key;
-    var token = req.body.token;
+    var user_id       = req.body.user_id;
+    var api_key       = req.body.api_key;
+    var token         = req.body.token;
     var shared_secret = req.body.shared_secret;
 
     var userQuery = User.find({
