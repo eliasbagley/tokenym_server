@@ -7,12 +7,16 @@ var Grid     = require("./Grid");
 var Q        = require("Q");
 var User     = require('./model/user.js');
 var Token    = require('./model/token.js');
+var redis    = require("redis");
+
+var client = redis.createClient();
 
 Q.longStackSupport = true;
 
 var app = express();
 app.use(express.logger());
 app.use(express.bodyParser());
+
 
 var port = 5000;
 
@@ -29,152 +33,114 @@ var cols         = 5;
 //register(email, password), sends email containing grid + 4 chars
 // H(password), subtract 6 characters, 4 of which are pin
 // create DB entry: email : user object containing email, grid, user_id api key, and id
+app.post('/user/register/:key', function (req, res) {
 
-function createUser(email, password) {
+    var registrationKey  = req.params.key;
+
+    client.get(key, onReturnUserInfo);
+    function onReturnUserInfo(err, user) {
+       registerUser(user);
+    }
+});
+
+function registerUser(user) {
+    console.log('registering user');
+
+    // pull out the email and hashAndSalt
+    var idAndPin = generateIdAndPin(hashAndSalt);
+
+    var id = idAndPin[0];
+    var pin = idAndPin[1];
+
+    // create the grid
+    var grid = new Grid(rows, cols);
+
+    // email the pin and grid
+    //
+    // create the user
+    var user = createuser(email, id, hashAndSalt, grid);
+
+    // save the user in the db
+    saveUser(user);
 }
 
-function checkIfTaken(email ) {
-    //check that the email address doesn't already exist in the db
-    var query = User.find({
-        "email": email
-    });
-    var user;
+function saveUser(user){
+    user.save(function (err) {
+        console.log('error saving user');
+    })
+}
 
-    Q.ninvoke(query, "exec")
-    .done(function(results) {
-        if (results.length > 0) {
-            res.end('email address taken');
-            console.log('Email address taken');
-        }
-    },
-    function (err) {
-        res.send("error in query")
-        console.log('Error in query: ' + err)
+function createUser(email, id, hash, grid) {
+    // store the grid, email, id in the userSchema object
+    var user = new User({
+        "email": email,
+        "id": id,
+        "grid": g,
+        "salt": null,
+        "api_key": null,
+        "hash": hash
     });
+
+    return user;
+}
+
+function generateIdAndPin(hashAndSalt) {
+    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
+    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
+    console.log("hash: " + hash + " salt: " + salt);
+
+    // convert hash to hex
+    hash = utils.base64ToHex(hash);
+    console.log('Hex hash: ' + hash)
+
+    // generate the pin and Id from the hash and magic numbers
+    var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
+    var id = idAndPinArr[0];
+    console.log('id: ' + id);
+    var pin = idAndPinArr[1];
+    console.log('pin: ' + pin);
+
+    return idAndPinArr;
 }
 
 app.post('/user/register', function(req, res) {
     var email    = req.body.email;
     var password = req.body.password;
 
-    //check that the email address doesn't already exist in the db
     var query = User.find({
         "email": email
     });
-    var user;
 
-    checkIfTaken(email)
-    /*
-     *query.exec(function(err, results) {
-     *    if (err) {
-     *        res.send("error in query")
-     *        console.log('Error in query')
-     *    } else {
-     *        if (results.length > 0) {
-     *            res.end("email address taken");
-     *        }
-     *    }
-     *})
-     */
-    Q.ninvoke(query, "exec")
-    .done(function(results) {
-        if (results.length > 0) {
-            res.end('email address taken');
-            console.log('Email address taken');
-            return;
+    query.exec(function(err, results) {
+
+        console.log('query complete');
+        if (err) {
+            console.log('error in query')
+            res.end('error in query')
         }
+        if (results.length > 0) {
+            // send a notice to the email address that someone tried registering (or ignore it)
+            console.log('Email address in use');
+            res.end('done')
+            return;
+        } else {
+            // TODO send a registration link to the email address
+            // generate a key to authenticate this user creation
+            var registrationKey = uuid.v4();
+            console.log(registrationKey);
 
-
-    },
-    function (err) {
-        res.send("error in query")
-        console.log('Error in query: ' + err)
+            cacheUser(registrationKey, email, password);
+            res.end('done')
+        }
     });
-
-    //TODO email user with access code to complete registration
-    //
-    Q.nfcall(query.exec)
-    .then(function () {
-        if (results.length > 0) {
-            return false;
-        }
-        return true;
-    },
-    function (err) {
-        console.log('Error in user query');
-    })
-    .done(function(emailTaken) {
-        if (emailTaken) {
-            res.end('email address taken');
-            console.log('email address taken');
-            return;
-        }
-
-    })
-    // bcrypt hash the password
-    var bcrypt promise = Q.nfcall(bcrypt.hash, password, null, null);
-    .then(function onFinishedHashing(hashAndSalt) {
-        // separate hash and salt
-        var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
-        var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
-        console.log("hash: " + hash + " salt: " + salt);
-
-        // convert hash to hex
-        hash = utils.base64ToHex(hash);
-        console.log('Hex hash: ' + hash)
-
-        // generate the pin and Id from the hash and magic numbers
-        var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
-        var pin = idAndPinArr[1];
-        console.log('pin: ' + pin);
-        var id = idAndPinArr[0];
-        console.log('id: ' + id);
-
-        return [id, hashAndSalt];
-    })
-    .spread(function createUser(id, hashAndSalt){
-        // generate a grid
-        var g = new Grid(rows, cols);
-        console.log("Grid:" + g);
-
-        // store the grid, email, id in the userSchema object
-        var user = new User({
-            "email": email,
-            "id": id,
-            "grid": g,
-            "salt": null,
-            "api_key": null,
-            "hashAndSalt": hashAndSalt
-        });
-
-        return user;
-    })
-    .then (function saveUser(user) {
-        console.log('saving user...');
-
-        Q.ninvoke(user, "save")
-        .then(function() {
-            console.log("user %s has been saved", user._id)
-        },
-        function (err) {
-            console.log('Save failure: ' + err);
-        });
-
-    })
-    .catch(function(error) {
-        console.log('There was an error: ' + error);
-    })
-    .done();
-
-    // send the pin and grid to the email address
-    //utils.email(email, grid, pin);
-
-    console.log("done registering!")
-
 });
 
-function saveUser(user){
+function cacheUser(registrationKey, email, password) {
+    bcrypt.hash(password, null, null, function (err, hash) {
+        client.hmset(registrationKey, "email", email, "hash", hash);
+    })
 }
+
 
 // request a random keyboard using the email address and password. The function
 // looks up the user corresponding to that email address and bcrypt hashed password. The keyboard will encrypt
