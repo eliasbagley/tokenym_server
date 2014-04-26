@@ -8,17 +8,22 @@ var Q        = require("Q");
 var User     = require('./model/user.js');
 var Token    = require('./model/token.js');
 var redis    = require("redis");
+var morgan   = require("morgan");
+var parser   = require("body-parser");
 
 var client = redis.createClient();
 
 Q.longStackSupport = true;
 
 var app = express();
-app.use(express.logger());
-app.use(express.bodyParser());
-
+app.use(morgan());
+app.use(parser());
 
 var port = 5000;
+
+app.listen(port, function() {
+    console.log('Tokenym Server listening on port ' + port);
+});
 
 // magic numbers
 var pinLength    = 4;
@@ -112,7 +117,6 @@ app.post('/user/register', function(req, res) {
     });
 
     query.exec(function(err, results) {
-
         console.log('query complete');
         if (err) {
             console.log('error in query')
@@ -410,6 +414,3 @@ app.post('/user/logout', function(req, res) {
     });
 })
 
-app.listen(port, function() {
-    console.log('Tokenym Server listening on port ' + port);
-});
