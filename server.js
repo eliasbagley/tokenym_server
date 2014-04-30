@@ -11,6 +11,9 @@ var redis    = require("redis");
 var morgan   = require("morgan");
 var parser   = require("body-parser");
 
+// connect to mongodb
+require("./model/db.js")
+
 var client = redis.createClient();
 
 Q.longStackSupport = true;
@@ -24,6 +27,8 @@ var port = 5000;
 app.listen(port, function() {
     console.log('Tokenym Server listening on port ' + port);
 });
+
+
 
 // magic numbers
 var pinLength    = 4;
@@ -40,19 +45,35 @@ var cols         = 5;
 // create DB entry: email : user object containing email, grid, user_id api key, and id
 app.post('/user/register/:key', function (req, res) {
 
+    //TODO add a timer to expire this registration key after x minutes
     var registrationKey  = req.params.key;
 
-    client.get(key, onReturnUserInfo);
+    client.hgetall(registrationKey, onReturnUserInfo);
+
     function onReturnUserInfo(err, user) {
-       registerUser(user);
+        if (err) {
+            console.log(err)
+            res.end('error retrieving key from redis')
+        }
+
+        if (user) {
+           registerUser(user, function(err) {
+                console.log('user registered')
+                client.del(registrationKey)
+                console.log('key deleted')
+           })
+
+           // remove the registration key from redis so it can't be reused
+        } else {
+            res.end('invalid registration key')
+            console.log('invalid registration key')
+        }
     }
 });
 
-function registerUser(user) {
-    console.log('registering user');
-
+function registerUser(user, cb) {
     // pull out the email and hashAndSalt
-    var idAndPin = generateIdAndPin(hashAndSalt);
+    var idAndPin = generateIdAndPin(user.hash);
 
     var id = idAndPin[0];
     var pin = idAndPin[1];
@@ -63,28 +84,38 @@ function registerUser(user) {
     // email the pin and grid
     //
     // create the user
-    var user = createuser(email, id, hashAndSalt, grid);
+    var user = createUser(user.email, id, user.hash, grid);
 
     // save the user in the db
-    saveUser(user);
+    saveUser(user, function(err) {
+        cb(err)
+    });
 }
 
-function saveUser(user){
+function saveUser(user, cb){
     user.save(function (err) {
-        console.log('error saving user');
+        if (err) {
+            console.log('error saving user')
+            cb(err)
+        } else {
+            console.log('user ' + user.email + ' saved')
+            cb(null)
+        }
     })
 }
 
 function createUser(email, id, hash, grid) {
+    console.log('creating user')
     // store the grid, email, id in the userSchema object
     var user = new User({
         "email": email,
         "id": id,
-        "grid": g,
+        "grid": grid,
         "salt": null,
         "api_key": null,
         "hash": hash
     });
+    console.log(user)
 
     return user;
 }
@@ -112,17 +143,12 @@ app.post('/user/register', function(req, res) {
     var email    = req.body.email;
     var password = req.body.password;
 
-    var query = User.find({
-        "email": email
-    });
-
-    query.exec(function(err, results) {
-        console.log('query complete');
+    User.findOne({"email":email}, function(err, result) {
         if (err) {
             console.log('error in query')
             res.end('error in query')
         }
-        if (results.length > 0) {
+        if (result) {
             // send a notice to the email address that someone tried registering (or ignore it)
             console.log('Email address in use');
             res.end('done')
@@ -130,6 +156,7 @@ app.post('/user/register', function(req, res) {
         } else {
             // TODO send a registration link to the email address
             // generate a key to authenticate this user creation
+            console.log('sending registration link to email...')
             var registrationKey = uuid.v4();
             console.log(registrationKey);
 
