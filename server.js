@@ -10,6 +10,7 @@ var Token    = require('./model/token.js');
 var redis    = require("redis");
 var morgan   = require("morgan");
 var parser   = require("body-parser");
+var registrationRouter = require('./Routes/registration')
 
 // connect to mongodb
 require("./model/db.js")
@@ -21,6 +22,7 @@ Q.longStackSupport = true;
 var app = express();
 app.use(morgan());
 app.use(parser());
+app.use('/user/register', registrationRouter)
 
 var port = 5000;
 
@@ -38,139 +40,6 @@ var keyboardSize = 25;
 var tokenSize    = 10;
 var rows         = 5;
 var cols         = 5;
-
-// API:
-//register(email, password), sends email containing grid + 4 chars
-// H(password), subtract 6 characters, 4 of which are pin
-// create DB entry: email : user object containing email, grid, user_id api key, and id
-app.post('/user/register/:key', function (req, res) {
-
-    //TODO add a timer to expire this registration key after x minutes
-    var registrationKey  = req.params.key;
-
-    client.hgetall(registrationKey, onReturnUserInfo);
-
-    function onReturnUserInfo(err, user) {
-        if (err) {
-            console.log(err)
-            res.end('error retrieving key from redis')
-        }
-
-        if (user) {
-           registerUser(user, function(err) {
-                console.log('user registered')
-                client.del(registrationKey)
-                console.log('key deleted')
-           })
-
-           // remove the registration key from redis so it can't be reused
-        } else {
-            res.end('invalid registration key')
-            console.log('invalid registration key')
-        }
-    }
-});
-
-function registerUser(user, cb) {
-    // pull out the email and hashAndSalt
-    var idAndPin = generateIdAndPin(user.hash);
-
-    var id = idAndPin[0];
-    var pin = idAndPin[1];
-
-    // create the grid
-    var grid = new Grid(rows, cols);
-
-    // email the pin and grid
-    //
-    // create the user
-    var user = createUser(user.email, id, user.hash, grid);
-
-    // save the user in the db
-    saveUser(user, function(err) {
-        cb(err)
-    });
-}
-
-function saveUser(user, cb){
-    user.save(function (err) {
-        if (err) {
-            console.log('error saving user')
-            cb(err)
-        } else {
-            console.log('user ' + user.email + ' saved')
-            cb(null)
-        }
-    })
-}
-
-function createUser(email, id, hash, grid) {
-    console.log('creating user')
-    // store the grid, email, id in the userSchema object
-    var user = new User({
-        "email": email,
-        "id": id,
-        "grid": grid,
-        "salt": null,
-        "api_key": null,
-        "hash": hash
-    });
-    console.log(user)
-
-    return user;
-}
-
-function generateIdAndPin(hashAndSalt) {
-    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
-    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
-    console.log("hash: " + hash + " salt: " + salt);
-
-    // convert hash to hex
-    hash = utils.base64ToHex(hash);
-    console.log('Hex hash: ' + hash)
-
-    // generate the pin and Id from the hash and magic numbers
-    var idAndPinArr = utils.createPinAndId(hash, pinLength, n1, n2);
-    var id = idAndPinArr[0];
-    console.log('id: ' + id);
-    var pin = idAndPinArr[1];
-    console.log('pin: ' + pin);
-
-    return idAndPinArr;
-}
-
-app.post('/user/register', function(req, res) {
-    var email    = req.body.email;
-    var password = req.body.password;
-
-    User.findOne({"email":email}, function(err, result) {
-        if (err) {
-            console.log('error in query')
-            res.end('error in query')
-        }
-        if (result) {
-            // send a notice to the email address that someone tried registering (or ignore it)
-            console.log('Email address in use');
-            res.end('done')
-            return;
-        } else {
-            // TODO send a registration link to the email address
-            // generate a key to authenticate this user creation
-            console.log('sending registration link to email...')
-            var registrationKey = uuid.v4();
-            console.log(registrationKey);
-
-            cacheUser(registrationKey, email, password);
-            res.end('done')
-        }
-    });
-});
-
-function cacheUser(registrationKey, email, password) {
-    bcrypt.hash(password, null, null, function (err, hash) {
-        client.hmset(registrationKey, "email", email, "hash", hash);
-    })
-}
 
 
 // request a random keyboard using the email address and password. The function

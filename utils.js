@@ -13,14 +13,20 @@ exports.possible = possible;
  *
  * example: ['abcdefg', '1234'] = utils.createPinAndId('abcxx1234xxxdefg', 4, 2, 3)
  */
-exports.createPinAndId = function createPinAndId(hash, pinLength) {
+exports.createPinAndId = function createPinAndId(hashAndSalt, pinLength) {
     //TODO test this better
+    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
+    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
+
+    // convert hash to hex
+    hash = base64ToHex(hash);
+
     var n1 = Math.floor(Math.random()*7);
     var n2 = Math.floor(Math.random()*7);
 
     var i = Math.floor(Math.random()*(hash.length-pinLength-n1-n2) + n1);
     var pin = hash.slice(i, i+pinLength);
-    var id = hash.replace(hash.substring(i-n1, i+pinLength+n2), "");
+    var id = hash.replace(hash.substring(i-n2, i+pinLength+n2), "");
 
     return [id, pin];
 }
@@ -138,8 +144,11 @@ exports.generateKeyboard = function generateKeyboard(length) {
     return shuffledKeyboard;
 }
 
-exports.base64ToHex = function base64ToHex(base64String) {
+
+var base64ToHex = function base64ToHex(base64String) {
     var buf = new Buffer(base64String, 'base64');
     var hexString = buf.toString('hex');
     return hexString;
 }
+
+exports.base64ToHex = base64ToHex

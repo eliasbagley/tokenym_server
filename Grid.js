@@ -1,7 +1,10 @@
 // Grid
 var utils = require("./utils");
 
-function Grid(rows, cols) {
+var rows = 5
+var cols = 5
+
+function Grid() {
     this.rows = rows;
     this.cols = cols;
     this.data = utils.getRandomChars(rows*cols);
