@@ -12,7 +12,6 @@ var client = redis.createClient()
 var router = express.Router()
 module.exports = router
 
-
 function registerUser(user, cb) {
     // pull out the email and hashAndSalt
 
@@ -54,8 +53,8 @@ function createUser(email, id, hash, grid) {
         "email": email,
         "id": id,
         "grid": grid,
-        "salt": null,
         "api_key": null,
+        "keyboard" : null,
         "hash": hash
     });
 
@@ -64,7 +63,7 @@ function createUser(email, id, hash, grid) {
 
 function cacheUser(registrationKey, email, password) {
     bcrypt.hash(password, null, null, function (err, hash) {
-        client.hmset(registrationKey, "email", email, "hash", hash);
+        client.hmset(registrationKey, "email", email, "hash", hash)
 
         // set a timer to expire the key in 1 hr
         client.expire(registrationKey, 60*60) // seconds
@@ -111,7 +110,8 @@ router.param('registration_key', function(req, es, next, key) {
             next(err)
         } else {
             if (user) {
-                //client.del(key)
+                // delete the registration key since it's now redeemed
+                client.del(key)
             }
             req.user = user
             next()

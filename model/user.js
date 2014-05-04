@@ -26,7 +26,7 @@ var userSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
-    hashAndSalt: {
+    hash: {
         type: String,
         trim: true
     }

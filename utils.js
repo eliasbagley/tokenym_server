@@ -3,7 +3,12 @@ var crypto = require("crypto");
 
 var possible = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 var hex_chars = "0123456789abcdef";
-exports.possible = possible;
+var keyboardSize = 25
+var n1 = 4
+var n2 = 3
+var pinLength = 4
+
+//exports.possible = possible;
 
 
 /* Given a hash, pin length, and n1 and n2, returns an array containing
@@ -21,9 +26,6 @@ exports.createPinAndId = function createPinAndId(hashAndSalt, pinLength) {
     // convert hash to hex
     hash = base64ToHex(hash);
 
-    var n1 = Math.floor(Math.random()*7);
-    var n2 = Math.floor(Math.random()*7);
-
     var i = Math.floor(Math.random()*(hash.length-pinLength-n1-n2) + n1);
     var pin = hash.slice(i, i+pinLength);
     var id = hash.replace(hash.substring(i-n2, i+pinLength+n2), "");
@@ -32,8 +34,9 @@ exports.createPinAndId = function createPinAndId(hashAndSalt, pinLength) {
 }
 
 // returns string with the first instance of each character in char_arr removed
-exports.remove_chars = function remove_chars(hash, pin, n1, n2) {
+exports.remove_chars = function remove_chars(hash, pin) {
     if (string.length < chars.length) {
+        //TODO turn into error passing instead
         throw 'Bad arguments';
     }
 
@@ -87,9 +90,13 @@ exports.email = function email(email, grid, pin) {
 }
 
 // securely generates a token with specified length
-var generateToken = function generateToken(length, callback) {
-    crypto.randomBytes(length, function (ex, buf) {
-        if (ex) throw ex;
+var generateToken = function generateToken(callback) {
+    var length = tokenLength
+    crypto.randomBytes(length, function (err, buf) {
+        if (err) {
+            callback(err)
+            return
+        }
 
         var token = "";
         for (var i = 0; i < buf.length; i++) {
@@ -128,7 +135,8 @@ var randomChars = function getRandomChars(num) {
 exports.getRandomChars = randomChars;
 
 // generates a random on screen keyboard
-exports.generateKeyboard = function generateKeyboard(length) {
+exports.generateKeyboard = function generateKeyboard() {
+    var length = keyboardSize
     if (length < hex_chars.length) {
         throw 'Keyboard length cannot be less than the number of hex characters';
     }
@@ -136,6 +144,7 @@ exports.generateKeyboard = function generateKeyboard(length) {
     var unshuffledKeyboard = hex_chars;
 
     // get it long enough to be the keyboard with the blanks
+    //TODO make it so there's more variety than just extra spaces added on
     for (var i = 0; i < (length - hex_chars.length); i++) {
         unshuffledKeyboard += " ";
     }
