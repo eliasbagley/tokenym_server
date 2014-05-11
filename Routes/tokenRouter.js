@@ -5,14 +5,20 @@ var redis = require('redis')
 
 var client = redis.createClient()
 
+var router = module.exports = express.Router()
 
 router.post('/request', function(req, res, next) {
-   utils.generateToken(function(token) {
+   utils.generateToken(function(err, token) {
+       if (err) {
+           next(err)
+           return
+       }
         // write the token object to redis
-        client.hmset(token, 'id', req.user.id, 'secret', req.body.secret, 'price', req.body.price)
+        var tokenKey = 'token:'+token
+        client.hmset(tokenKey, 'id', req.user.id, 'secret', req.body.secret, 'price', req.body.price)
 
-        // exipire the token object after 10 minutes
-        client.expire(token, 10*60) //seconds
+        // exipire the token object after 20 minutes
+        client.expire(tokenKey, 10*60) //seconds
 
         // send back token
         res.json({'token' : token})
@@ -27,7 +33,7 @@ router.param('token', function(req, res, next, token) {
             return
         }
 
-        if (token) {
+        if (tokenObj) {
             req.tokenObj = tokenObj
 
             // delete the token object from redis now that it's redeemed
@@ -35,12 +41,15 @@ router.param('token', function(req, res, next, token) {
 
             next()
         } else {
-            next(new Error('Token does not exist'))
+            var err = new Error()
+            err.status = 404
+            err = new Error('token does not exist')
+            next(err)
         }
     })
 })
 
 router.post('/redeem/:token', function(req, res, next) {
     // send back the associated id
-    res.json({'id' : req.tokenObj.id}
+    res.json({'id' : req.tokenObj.id})
 })

@@ -1,4 +1,4 @@
-var mongoose = require('mongoose');
+var mongoose = require('mongoose')
 
 var userSchema = new mongoose.Schema({
     email: {
@@ -7,30 +7,15 @@ var userSchema = new mongoose.Schema({
     },
     id: {
         type: String,
-        trim: true
     },
     grid: mongoose.Schema.Types.Mixed,
-    salt: {
-        type: String,
-        trim: true
-    },
     balance: {
         type: Number,
         default: 100
     },
-    // the last keyboard they requested. Gets reset after a successful login
-    keyboard: {
-        type: String
-    },
-    api_key: {
-        type: String,
-        trim: true
-    },
     hash: {
         type: String,
-        trim: true
     }
-});
+})
 
-var User = module.exports = mongoose.model('Users', userSchema);
-
+var User = module.exports = mongoose.model('Users', userSchema)

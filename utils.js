@@ -1,15 +1,25 @@
-var nodemailer = require("nodemailer");
-var crypto = require("crypto");
+var nodemailer = require('nodemailer')
+var crypto = require('crypto')
+var _ = require('underscore')
 
-var possible = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+//TODO great place to use regular expressions
+var possible = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 var hex_chars = "0123456789abcdef";
 var keyboardSize = 25
 var n1 = 4
 var n2 = 3
 var pinLength = 4
 
-//exports.possible = possible;
+// pulls the inner part from the hash given the pin index
+// returns null if pin isn't inside hash
+function createId(hash, pin) {
+    var i = hash.search(pin)
+    if (i < 0) {
+        return null
+    }
 
+    return hash.replace(hash.substring(i - n1, i + pinLength + n2), '')
+}
 
 /* Given a hash, pin length, and n1 and n2, returns an array containing
  * the pin pulled from a random spot in the hash, and the id constructed from removing the
@@ -18,146 +28,133 @@ var pinLength = 4
  *
  * example: ['abcdefg', '1234'] = utils.createPinAndId('abcxx1234xxxdefg', 4, 2, 3)
  */
-exports.createPinAndId = function createPinAndId(hashAndSalt, pinLength) {
-    //TODO test this better
-    var salt = hashAndSalt.substring(0, hashAndSalt.length - 31);
-    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length);
+exports.createPinAndId = function createPinAndId(hashAndSalt) {
+    //TODO test this better - this is the main part
+    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length)
 
     // convert hash to hex
-    hash = base64ToHex(hash);
+    hash = base64ToHex(hash)
 
-    var i = Math.floor(Math.random()*(hash.length-pinLength-n1-n2) + n1);
-    var pin = hash.slice(i, i+pinLength);
-    var id = hash.replace(hash.substring(i-n2, i+pinLength+n2), "");
+    var i = _.random(n1, hash.length - pinLength - n2)
+    var pin = hash.slice(i, i+pinLength)
 
-    return [id, pin];
+
+    var id = createId(hash, pin)
+
+    return [id, pin]
 }
 
 // returns string with the first instance of each character in char_arr removed
-exports.remove_chars = function remove_chars(hash, pin) {
-    if (string.length < chars.length) {
-        //TODO turn into error passing instead
-        throw 'Bad arguments';
-    }
+// returns null if pin isn't inside hashAndSalt
+var generateId = function generateId(hashAndSalt, pin) {
+    var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length)
+    hash = base64ToHex(hash)
 
-    var i = string.search(chars);
-    string = string.replace(string.substring(i-n1, i+pin.length+n2), "");
+    var id = createId(hash, pin)
 
-    return string;
+    return id
 }
 
 // fixed time comparison to prevent timing attacks
 exports.secureCompareString = function secureCompareString(str1, str2) {
-    var same = true;
-    var max_length = (str1.length < str2.length) ? str1.length : str2.length;
+    var same = true
+    var max_length = (str1.length < str2.length) ? str1.length : str2.length
 
     for (var i = 0; i < max_length; ++i) {
         if (str1.length >= i && str2.length >= i && str1[i] != str2[i]) {
-            same = false;
+            same = false
         }
     }
 
-    return same;
+    return same
 }
 
-exports.email = function email(email, grid, pin) {
-
-    var smtpTransport = nodemailer.createTransport("SMTP", {
-        service: "Gmail",
-        auth: {
-            user: "gmail.user@gmail.com",
-            pass: "userpass"
-        }
-    });
-
-    var mailOptions = {
-        from: "Tokenym",
-        to: email,
-        subject: "Welcome to Tokenym",
-        text: "grid: " + grid + " pin: " + pin
-    }
-
-    smtpTransport.sendMail(mailOptions, function (err, res) {
-        if (err) {
-            console.log(err);
-        }
-        else {
-            console.log("Message sent: " + response.message);
-        }
-    });
-
-    smtpTransport.close();
-}
-
-// securely generates a token with specified length
-var generateToken = function generateToken(callback) {
-    var length = tokenLength
-    crypto.randomBytes(length, function (err, buf) {
+// securely generates a token
+module.exports.generateToken = function generateToken(callback) {
+    crypto.randomBytes(tokenLength, function (err, buf) {
         if (err) {
             callback(err)
             return
         }
 
-        var token = "";
+        var token = ""
         for (var i = 0; i < buf.length; i++) {
-            token += possible[buf[i]%36];
+            token += possible[buf[i]%possible.length]
         }
 
-        callback(token);
-    });
+        callback(token)
+    })
 }
-exports.generateToken = generateToken;
 
 /**
  * Randomize array element order in-place.
  * Using Fisher-Yates shuffle algorithm.
  */
-var shuffleArray = function shuffleArray(array) {
-    for (var i = array.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var temp = array[i];
-        array[i] = array[j];
-        array[j] = temp;
-    }
-    return array;
-}
-exports.shuffleArray = shuffleArray;
+var secureShuffleArray =  function secureShuffleArray(array, callback) {
+    crypto.randomBytes(array.length, function(err, buf) {
+        if (err) {
+            callback(err)
+            return
+        }
 
-var shuffleString = function shuffleString(string) {
-    return shuffleArray(string.split("")).join("");
-}
-exports.shuffleString = shuffleString;
+        for (var i = array.length; i > 0; i++) {
+            // 0 <= j <= i
+            var j = buf[i]%(i+1)
 
-var randomChars = function getRandomChars(num) {
-    var shuffledChars = shuffleString(possible);
-    return shuffledChars.substring(0, num-1);
+            var temp = array[i];
+            array[i] = array[j];
+            array[j] = temp;
+        }
+
+        callback(null, array)
+    })
 }
-exports.getRandomChars = randomChars;
+
+var secureShuffleString = function secureShuffleString(string, callback) {
+    secureShuffleArray(string.split(''), function(err, result) {
+        if (err) {
+            callback(err)
+        } else {
+            callback(null, result.join(''))
+        }
+    })
+}
+
+module.exports.randomChars = function getRandomChars(num, callback) {
+    secureShuffleString(possible, function(err, result) {
+        if (err) {
+            callback(err)
+        } else {
+            callback(null, result.substring(0, num-1))
+        }
+    })
+}
 
 // generates a random on screen keyboard
-exports.generateKeyboard = function generateKeyboard() {
-    var length = keyboardSize
-    if (length < hex_chars.length) {
-        throw 'Keyboard length cannot be less than the number of hex characters';
-    }
-
+module.exports.generateKeyboard = function generateKeyboard(callback) {
     var unshuffledKeyboard = hex_chars;
 
-    // get it long enough to be the keyboard with the blanks
-    //TODO make it so there's more variety than just extra spaces added on
-    for (var i = 0; i < (length - hex_chars.length); i++) {
-        unshuffledKeyboard += " ";
-    }
+    var remainingLen = keyboardSize - hex_chars.length
 
-    var shuffledKeyboard = shuffleString(unshuffledKeyboard);
-    return shuffledKeyboard;
+    crypto.randomBytes(remainingLen, function (err, buf) {
+        if (err) {
+            callback(err)
+            return
+        }
+
+        for (var i = 0; i < buf.length; i++) {
+            unshuffledKeyboard += hex_chars.charAt(buf[i]%hex_chars.length);
+        }
+
+        // shuffle the keyboard
+        secureShuffleString(unshuffledKeyboard, callback);
+    })
 }
 
 
-var base64ToHex = function base64ToHex(base64String) {
+var base64ToHex = module.exports.base64ToHex = function base64ToHex(base64String) {
     var buf = new Buffer(base64String, 'base64');
     var hexString = buf.toString('hex');
     return hexString;
 }
 
-exports.base64ToHex = base64ToHex

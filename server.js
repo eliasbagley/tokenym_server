@@ -1,5 +1,6 @@
 // utils
 var express  = require("express");
+var redis    = require('redis')
 
 // models
 var User     = require('./model/user.js');
@@ -41,15 +42,20 @@ function notFoundHandler(res, req, next) {
 }
 
 function authenticateUser(res, req, next) {
-    User.findOne({'api_key' : req.body.api_key}, function (err, user) {
+    console.log('in authenticate user handler')
+    var api_key = req.body.api_key
+
+    // load the user from the api key
+    client.hgetall(api_key, function (err, user) {
         if (err) {
             next(err)
         } else {
-            if (result) {
+            if (user) {
                 req.user = user
+                req.api_key = api_key
                 next()
             } else {
-                var err = new Error('Forbidden')
+                var err = new Error('nonexistant API key')
                 err.status = 403
                 next(err)
             }
