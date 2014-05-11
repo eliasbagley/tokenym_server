@@ -1,19 +1,18 @@
 var fs = require('fs')
 var nodemailer = require('nodemailer')
 
-var smtpTransport;
+var smtpTransport
+var service = 'Gmail'
 
 // read the email credentials from the filesystem
 fs.readFile('.emailcredentials', function(err, jsonCredentials) {
     // base64 decode the credentials on disk to prevent prying eyes
     var credentials = JSON.parse(jsonCredentials)
     var emailAddress = new Buffer(credentials.email, 'base64').toString('ascii')
-    console.log('email address: ' + emailAddress)
     var password = new Buffer(credentials.password, 'base64').toString('ascii')
-    console.log('password: ' + password)
 
     smtpTransport = nodemailer.createTransport('SMTP', {
-        service: 'Gmail',
+        service: service,
         auth: {
             user: emailAddress,
             pass: password

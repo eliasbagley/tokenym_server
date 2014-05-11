@@ -77,6 +77,10 @@ function errorHandler(err, req, res, next) {
     res.end('error code: ' + err.status + ' message: ' + err.message)
 }
 
+process.on('uncaughtException', function(err) {
+    console.log(err)
+})
+
 var port = 5000;
 app.listen(port, function() {
     console.log('Tokenym Server listening on port ' + port);

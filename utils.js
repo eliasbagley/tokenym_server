@@ -91,7 +91,9 @@ module.exports.generateToken = function generateToken(callback) {
  * Using Fisher-Yates shuffle algorithm.
  */
 var secureShuffleArray =  function secureShuffleArray(array, callback) {
+    console.log('shuffling array')
     crypto.randomBytes(array.length, function(err, buf) {
+        console.log('got random bytes')
         if (err) {
             callback(err)
             return
@@ -106,27 +108,23 @@ var secureShuffleArray =  function secureShuffleArray(array, callback) {
             array[j] = temp;
         }
 
+        console.log('done shuffling')
         callback(null, array)
     })
 }
 
 var secureShuffleString = function secureShuffleString(string, callback) {
     secureShuffleArray(string.split(''), function(err, result) {
-        if (err) {
-            callback(err)
-        } else {
-            callback(null, result.join(''))
-        }
+        var shuffledString = err ? null : result.join('')
+        callback(err, shuffledString)
     })
 }
 
 module.exports.randomChars = function getRandomChars(num, callback) {
     secureShuffleString(possible, function(err, result) {
-        if (err) {
-            callback(err)
-        } else {
-            callback(null, result.substring(0, num-1))
-        }
+        console.log('got random chars')
+        var randomChars = err ? null : result.substring(0, num-1)
+        callback(err, randomChars)
     })
 }
 

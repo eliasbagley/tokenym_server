@@ -94,6 +94,7 @@ router.post('/:registration_key', function(req, res, next) {
 
     var id = idAndPin[0]
     var pin = idAndPin[1]
+    console.log('pin: ' + pin + ' id: ' + id)
 
     // create the grid
     Grid.create(function(err, grid) {
@@ -101,6 +102,7 @@ router.post('/:registration_key', function(req, res, next) {
             next(err)
         } else {
             // create and save user object
+            console.log('grid created, creating user')
             var user = createUser(req.user.email, id, req.user.hash, grid)
             user.save()
 
@@ -114,6 +116,8 @@ router.post('/:registration_key', function(req, res, next) {
     emailer.sendGridAndPinEmail(req.user.email, req.user.grid.data, req.user.pin, function(err) {
         if (err) {
             next(err)
+        } else {
+            console.log('done sending email')
         }
     })
 })

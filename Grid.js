@@ -5,13 +5,16 @@ var rows = 5
 var cols = 5
 
 var Grid = function Grid(rows, cols, data) {
+    console.log('inside grid constructor')
     this.rows = rows
     this.cols = cols
     this.data = data
 }
 
 Grid.create = function(cb) {
+    console.log('getting random chars')
     utils.randomChars(rows*cols, function(err, data) {
+        console.log('got random chars')
         cb(err, new Grid(rows, cols, data))
     })
 }
