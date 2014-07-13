@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.6.5 2014-05-15
+
+  * Bumped version to v0.6.5
+  * Use tildes instead of carets for dependency listing [5296ce41]
+  * Allow clients to set a custom identityString (venables) [5373287d]
+  * bugfix (adding "-i" to sendmail command line for each new mail)  by copying this.args (vrodic) [05a8a9a3]
+  * update copyright (gdi2290) [3a6cba3a]
+
+## v0.6.4 2014-05-13
+
+  * Bumped version to v0.6.4
+  * added npmignore, bumped dependencies [21bddcd9]
+  * Add AOL to well-known services (msouce) [da7dd3b7]
+
 ## v0.6.3 2014-04-16
 
   * Bumped version to v0.6.3
