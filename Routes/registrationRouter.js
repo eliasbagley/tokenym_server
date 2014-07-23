@@ -41,14 +41,18 @@ function cacheUser(registrationKey, email, password) {
 // ////////////////////////////////////////////
 
 router.post('/', function(req, res, next) {
+    console.log("hitting /")
     var email    = req.body.email
     var password = req.body.password
 
     User.findOne({"email":email}, function(err, result) {
         if (err) {
+            console.log("there was an error");
             next(err)
             return
         }
+
+        console.log("there wasn't an error");
 
         if (!result) {
             //TODO registration link to email
@@ -60,6 +64,7 @@ router.post('/', function(req, res, next) {
 
         res.json({'status' : 1, 'message' : 'Registration link sent to email'})
     })
+    console.log("continuting");
 })
 
 
@@ -113,12 +118,14 @@ router.post('/:registration_key', function(req, res, next) {
     })
 }, function sendRegistrationCompleteEmail(req, res, next) {
     // email the grid data and pin to the user
-    emailer.sendGridAndPinEmail(req.user.email, req.user.grid.data, req.user.pin, function(err) {
-        if (err) {
-            next(err)
-        } else {
-            console.log('done sending email')
-        }
-    })
+    console.log("registration complete, sending email")
+    // emailer.sendGridAndPinEmail(req.user.email, req.user.grid.data, req.user.pin, function(err) {
+    //     if (err) {
+    //         console.log("error sending grid and pin email")
+    //         next(err)
+    //     } else {
+    //         console.log('done sending email')
+    //     }
+    // })
 })
 

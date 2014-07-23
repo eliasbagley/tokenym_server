@@ -9,10 +9,12 @@ var keyboardSize = 25
 var n1 = 4
 var n2 = 3
 var pinLength = 4
+var tokenLength = 7
 
 // pulls the inner part from the hash given the pin index
 // returns null if pin isn't inside hash
 function createId(hash, pin) {
+    console.log('in createId')
     var i = hash.search(pin)
     if (i < 0) {
         return null
@@ -46,7 +48,8 @@ exports.createPinAndId = function createPinAndId(hashAndSalt) {
 
 // returns string with the first instance of each character in char_arr removed
 // returns null if pin isn't inside hashAndSalt
-var generateId = function generateId(hashAndSalt, pin) {
+exports.generateId = function generateId(hashAndSalt, pin) {
+    console.log('generating id')
     var hash = hashAndSalt.substring(hashAndSalt.length - 31, hashAndSalt.length)
     hash = base64ToHex(hash)
 
@@ -57,6 +60,11 @@ var generateId = function generateId(hashAndSalt, pin) {
 
 // fixed time comparison to prevent timing attacks
 exports.secureCompareString = function secureCompareString(str1, str2) {
+    console.log('comparing strings ' + str1 + ' + and ' + str2)
+    if (str1 == null || str2 == null) {
+        return false
+    }
+
     var same = true
     var max_length = (str1.length < str2.length) ? str1.length : str2.length
 
@@ -71,6 +79,7 @@ exports.secureCompareString = function secureCompareString(str1, str2) {
 
 // securely generates a token
 module.exports.generateToken = function generateToken(callback) {
+    console.log('in generate token')
     crypto.randomBytes(tokenLength, function (err, buf) {
         if (err) {
             callback(err)
@@ -81,8 +90,9 @@ module.exports.generateToken = function generateToken(callback) {
         for (var i = 0; i < buf.length; i++) {
             token += possible[buf[i]%possible.length]
         }
+        console.log('token: ' + token)
 
-        callback(token)
+        callback(null, token)
     })
 }
 
@@ -93,13 +103,12 @@ module.exports.generateToken = function generateToken(callback) {
 var secureShuffleArray =  function secureShuffleArray(array, callback) {
     console.log('shuffling array')
     crypto.randomBytes(array.length, function(err, buf) {
-        console.log('got random bytes')
         if (err) {
             callback(err)
             return
         }
 
-        for (var i = array.length; i > 0; i++) {
+        for (var i = array.length; i > 0; i--) {
             // 0 <= j <= i
             var j = buf[i]%(i+1)
 
@@ -108,7 +117,6 @@ var secureShuffleArray =  function secureShuffleArray(array, callback) {
             array[j] = temp;
         }
 
-        console.log('done shuffling')
         callback(null, array)
     })
 }
@@ -130,22 +138,22 @@ module.exports.randomChars = function getRandomChars(num, callback) {
 
 // generates a random on screen keyboard
 module.exports.generateKeyboard = function generateKeyboard(callback) {
-    var unshuffledKeyboard = hex_chars;
+    console.log('calling generate keyboard')
 
-    var remainingLen = keyboardSize - hex_chars.length
-
-    crypto.randomBytes(remainingLen, function (err, buf) {
+    crypto.randomBytes(keyboardSize, function(err, buf) {
         if (err) {
             callback(err)
             return
         }
 
+        var unshuffledKeyboard = "";
         for (var i = 0; i < buf.length; i++) {
             unshuffledKeyboard += hex_chars.charAt(buf[i]%hex_chars.length);
         }
 
-        // shuffle the keyboard
-        secureShuffleString(unshuffledKeyboard, callback);
+        console.log('returning keyboard')
+        callback(null, unshuffledKeyboard)
+
     })
 }
 

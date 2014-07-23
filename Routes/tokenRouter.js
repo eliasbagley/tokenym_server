@@ -5,29 +5,41 @@ var redis = require('redis')
 
 var client = redis.createClient()
 
-var router = module.exports = express.Router()
+var router = express.Router()
+module.exports = router
 
 router.post('/request', function(req, res, next) {
-   utils.generateToken(function(err, token) {
+    utils.generateToken(function(err, token) {
        if (err) {
            next(err)
            return
        }
-        // write the token object to redis
-        var tokenKey = 'token:'+token
-        client.hmset(tokenKey, 'id', req.user.id, 'secret', req.body.secret, 'price', req.body.price)
+       console.log('generated token: ' + token)
 
-        // exipire the token object after 20 minutes
-        client.expire(tokenKey, 10*60) //seconds
+       // write the token object to redis
+       var tokenObj = {'id' : req.user.id}
+       if (req.body.secret) {
+           tokenObj.secret = req.body.secret
+       }
+       if (req.body.price) {
+           tokenObj.price = req.body.price
+       }
 
-        // send back token
-        res.json({'token' : token})
+       client.hmset(tokenKey, tokenObj)
+
+       // exipire the token object after 10 minutes
+       client.expire(tokenKey, 10*60) //seconds
+
+       // send back token
+       res.json({'token' : token})
    })
 })
 
 // reads the token obj from redis
 router.param('token', function(req, res, next, token) {
-    client.hgetall(token, function (err, tokenObj) {
+    var tokenKey = 'token:' + token
+
+    client.hgetall(tokenKey, function (err, tokenObj) {
         if (err) {
             next(err)
             return
@@ -35,9 +47,10 @@ router.param('token', function(req, res, next, token) {
 
         if (tokenObj) {
             req.tokenObj = tokenObj
+            console.log(tokenObj)
 
             // delete the token object from redis now that it's redeemed
-            client.del(token)
+            client.del(tokenKey)
 
             next()
         } else {

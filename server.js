@@ -9,6 +9,7 @@ var User     = require('./model/user.js');
 var morgan   = require("morgan");
 var parser   = require("body-parser");
 
+
 // Routers
 var registrationRouter = require('./Routes/registrationRouter')
 var loginRouter = require('./Routes/loginRouter')
@@ -35,36 +36,54 @@ app.use(notFoundHandler)
 
 app.use(errorHandler)
 
-function notFoundHandler(res, req, next) {
+function notFoundHandler(req, res, next) {
+    console.log("not found")
     var err = new Error('Not found')
     err.status = 404
     next(err)
 }
 
-function authenticateUser(res, req, next) {
-    console.log('in authenticate user handler')
-    var api_key = req.body.api_key
+function loadUser(id, cb) {
+    console.log("loading user")
+    User.findOne({'id' : id}, function(err, user) {
+        if (err) {
+            cb(err)
+        } else {
+            cb(null, user)
+        }
+    })
+}
 
-    // load the user from the api key
-    client.hgetall(api_key, function (err, user) {
+function authenticateUser(req, res, next) {
+    console.log('in authenticate user handler')
+    var api_key = req.header('X-TKN-ApiKey')
+
+    // load the user id from redis, and load the user from mongoose
+    client.get(api_key, function (err, userId) {
         if (err) {
             next(err)
         } else {
-            if (user) {
-                req.user = user
-                req.api_key = api_key
-                next()
+            if (userId) {
+                loadUser(userId, function (err, user) {
+                    if (err) {
+                        next(err)
+                    }
+                    console.log('loaded user ' + user)
+                    req.user = user
+                    next()
+                })
             } else {
-                var err = new Error('nonexistant API key')
-                err.status = 403
-                next(err)
+                console.log('nonexistant api key')
+                var error = new Error('nonexistant API key')
+                error.status = 403
+                next(error)
             }
         }
     })
 }
 
 function errorHandler(err, req, res, next) {
-    console.log('Error handler triggered')
+    console.log('Error handler triggered: ' + err.message)
 
     if (req.accepts('json')) {
         res.json({
@@ -85,4 +104,3 @@ var port = 5000;
 app.listen(port, function() {
     console.log('Tokenym Server listening on port ' + port);
 });
-
