@@ -4,6 +4,8 @@ var nodemailer = require('nodemailer')
 var smtpTransport
 var service = 'Gmail'
 
+var from = "Tokenym"
+
 // read the email credentials from the filesystem
 fs.readFile('.emailcredentials', function(err, jsonCredentials) {
     // base64 decode the credentials on disk to prevent prying eyes
@@ -20,9 +22,9 @@ fs.readFile('.emailcredentials', function(err, jsonCredentials) {
         })
 })
 
-exports.sendRegistratonEmail = function(emailAddress, registrationKey, cb) {
+exports.sendRegistrationLinkEmail = function(emailAddress, registrationKey, cb) {
     var mailOptions = {
-        from: "Tokenym",
+        from: from,
         to: emailAddress,
         subject: "Welcome to Tokenym",
         text: 'https://tokenym.com/user/register/' + registrationKey
@@ -35,7 +37,7 @@ exports.sendRegistratonEmail = function(emailAddress, registrationKey, cb) {
 
 exports.sendGridAndPinEmail = function(emailAddress, grid, pin, cb) {
     var mailOptions = {
-        from: "Tokenym",
+        from: from,
         to: emailAddress,
         subject: "Welcome to Tokenym",
         text: "grid: " + grid + " pin: " + pin

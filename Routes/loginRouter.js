@@ -48,6 +48,7 @@ router.use(function(req, res, next) {
 // Authentication step 1
 // Request a randomized keyboard nonce
 router.post('/keyboard', function(req, res, next) {
+    console.log('gen kb')
     utils.generateKeyboard(function(err, keyboard) {
         if (err) {
             next(err)
@@ -56,6 +57,7 @@ router.post('/keyboard', function(req, res, next) {
 
             // only set the KB on the user if they are authenticated with the password
             if (req.authenticated) {
+                console.log('autenticated!!')
                 var keyboardKey = 'keyboard:'+req.user.email
                 client.set(keyboardKey, keyboard)
                 client.expire(keyboardKey, 60*60*1) // expire in 1 hours
@@ -69,7 +71,8 @@ router.post('/keyboard', function(req, res, next) {
 
 // middleware to load the keyboard used for the user
 router.use(function (req, res, next) {
-    var keyboardKey = 'keyboard:'+req.user.email
+    console.log('loading keyboard')
+    var keyboardKey = 'keyboard:' + req.body.email
 
     client.get(keyboardKey, function(err, keyboard) {
         if (err) {
@@ -77,42 +80,57 @@ router.use(function (req, res, next) {
             return
         }
 
-        if (req.user) {
-            req.user.keyboard = keyboard
-        }
-
+        req.keyboard = keyboard
         next()
+        console.log('generated keyboard: ' + keyboard)
     })
 })
 
 // Authentication step 2 with grid encrypted pin
 router.post('/', function (req, res, next) {
+    if (!req.authenticated) {
+        authenticationFailed(req, res, next)
+        return
+    }
+
+    // pull user out of request object (loaded from middleware)
+    var user = req.user
+
+    console.log('grid: ' + user.grid)
+    console.log('grid len: ' + user.grid.rows)
     // decode the encrypted pin
-    var pin = user.grid.decode(req.body.pin, req.user.keyboard)
+    var pin = user.grid.decode(req.body.pin, req.keyboard)
     console.log('encoded: ' + req.body.pin + " decoded: " + pin)
 
     // recreate the id
-    var id = utils.generateId(req.user.hash, pin)
+    var id = utils.generateId(user.hash, pin)
     console.log('generated id: ' + id)
 
     // // see if the id's match for 2nd factor of authentication
-    var authenticated = req.authenticated && utils.secureCompareString(req.user.id, id)
+    var authenticated = utils.secureCompareString(user.id, id)
+
+    // send 403 error if not authenticated
+    if (!authenticated) {
+        authenticationFailed(req, res, next)
+        return
+    }
+
 
     // generate an api key for the user and store in redis
     var api_key = uuid.v4()
     console.log('api key:' + api_key)
 
-    if (authenticated) {
-        console.log('ACCESS GRANTED')
-        client.set(api_key, req.user.id)
-
-        // expire the api key after 7 days
-       client.expire(api_key, 60*60*24*7) //seconds
-    } else {
-        console.log('ACCESS DENIED')
-    }
+    console.log('ACCESS GRANTED')
+    client.set(api_key, user.id)
+    client.expire(api_key, 60*60*24*7) // expire api key in 7 days
 
     res.json({'api_key' : api_key})
 })
+
+function authenticationFailed(req, res, next) {
+    var err = new Error('Authentication failed')
+    err.status = 403
+    next(err)
+}
 
 

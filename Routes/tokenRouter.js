@@ -16,19 +16,21 @@ router.post('/request', function(req, res, next) {
        }
        console.log('generated token: ' + token)
 
-       // write the token object to redis
-       var tokenObj = {'id' : req.user.id}
-       if (req.body.secret) {
-           tokenObj.secret = req.body.secret
-       }
-       if (req.body.price) {
-           tokenObj.price = req.body.price
-       }
+        // save the token in redis only if user was loaded (authenticated)
+        if (req.user) {
+           // write the token object to redis
+           var tokenObj = {'id' : req.user.id}
+           if (req.body.secret) {
+               tokenObj.secret = req.body.secret
+           }
+           if (req.body.price) {
+               tokenObj.price = req.body.price
+           }
 
-       client.hmset(tokenKey, tokenObj)
-
-       // exipire the token object after 10 minutes
-       client.expire(tokenKey, 10*60) //seconds
+            var tokenKey = 'token:' + token
+           client.hmset(tokenKey, tokenObj)
+           client.expire(tokenKey, 10*60)  // expire token in 10 mins
+        }
 
        // send back token
        res.json({'token' : token})

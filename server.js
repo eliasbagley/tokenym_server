@@ -55,7 +55,6 @@ function loadUser(id, cb) {
 }
 
 function authenticateUser(req, res, next) {
-    console.log('in authenticate user handler')
     var api_key = req.header('X-TKN-ApiKey')
 
     // load the user id from redis, and load the user from mongoose
@@ -73,10 +72,11 @@ function authenticateUser(req, res, next) {
                     next()
                 })
             } else {
-                console.log('nonexistant api key')
-                var error = new Error('nonexistant API key')
-                error.status = 403
-                next(error)
+                next()
+                // console.log('nonexistant api key')
+                // var error = new Error('nonexistant API key')
+                // error.status = 404
+                // next(error)
             }
         }
     })

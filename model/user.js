@@ -8,7 +8,7 @@ var userSchema = new mongoose.Schema({
     id: {
         type: String,
     },
-    grid: mongoose.Schema.Types.Mixed,
+    grid: mongoose.Schema.Types.ObjectId,
     balance: {
         type: Number,
         default: 100

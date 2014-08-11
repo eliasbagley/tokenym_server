@@ -13,18 +13,17 @@ var client = redis.createClient()
 var router = express.Router()
 module.exports = router
 
-function createUser(email, id, hash, grid) {
+function createUser(user) {
     // store the grid, email, id in the userSchema object
     var user = new User({
-        "email": email,
-        "id": id,
-        "grid": grid,
-        "api_key": null,
-        "keyboard" : null,
-        "hash": hash
-    });
+        "email": user.email,
+        "id": user.id,
+        "grid": user.grid,
+        "hash": user.hash
+    })
 
-    return user;
+    console.log('saving user')
+    user.save()
 }
 
 function cacheUser(registrationKey, email, password) {
@@ -41,30 +40,32 @@ function cacheUser(registrationKey, email, password) {
 // ////////////////////////////////////////////
 
 router.post('/', function(req, res, next) {
-    console.log("hitting /")
     var email    = req.body.email
     var password = req.body.password
 
-    User.findOne({"email":email}, function(err, result) {
+    User.findOne({"email" : email}, function(err, user) {
         if (err) {
-            console.log("there was an error");
             next(err)
             return
         }
 
-        console.log("there wasn't an error");
-
-        if (!result) {
-            //TODO registration link to email
+        if (!user) {
             var registrationKey = uuid.v4();
             console.log(registrationKey);
 
-            cacheUser(registrationKey, email, password);
+            emailer.sendRegistrationLinkEmail(email, registrationKey, function(err) {
+                if (err) {
+                    next(err)
+                    return
+                }
+
+                cacheUser(registrationKey, email, password);
+            })
+
         }
 
         res.json({'status' : 1, 'message' : 'Registration link sent to email'})
     })
-    console.log("continuting");
 })
 
 
@@ -73,18 +74,18 @@ router.param('registration_key', function(req, es, next, key) {
     client.hgetall(key, function (err, user) {
         if (err) {
             next(err)
+            return
+        }
+
+        if (user) {
+            // delete the registration key since it's now redeemed
+            req.user = user
+            client.del(key)
+            next()
         } else {
-            if (user) {
-                // delete the registration key since it's now redeemed
-                req.user = user
-                client.del(key)
-                next()
-            } else {
-                console.log('registration key not found')
-                var err = new Error('invalid registration key')
-                err.status = 404
-                next(err)
-            }
+            var err = new Error('invalid registration key')
+            err.status = 404
+            next(err)
         }
     })
 })
@@ -99,6 +100,8 @@ router.post('/:registration_key', function(req, res, next) {
 
     var id = idAndPin[0]
     var pin = idAndPin[1]
+    req.user.id = id
+    req.user.pin = pin
     console.log('pin: ' + pin + ' id: ' + id)
 
     // create the grid
@@ -106,26 +109,29 @@ router.post('/:registration_key', function(req, res, next) {
         if (err) {
             next(err)
         } else {
-            // create and save user object
-            console.log('grid created, creating user')
-            var user = createUser(req.user.email, id, req.user.hash, grid)
-            user.save()
-
             req.user.grid = grid
-            req.user.pin = pin
+
+            // create and save user object
+
+            console.log('grid created, creating user')
+
+            createUser(req.user)
+
             next()
         }
     })
-}, function sendRegistrationCompleteEmail(req, res, next) {
-    // email the grid data and pin to the user
+}, sendRegistratonCompleteEmail)
+
+function sendRegistratonCompleteEmail(req, res, next) {
     console.log("registration complete, sending email")
-    // emailer.sendGridAndPinEmail(req.user.email, req.user.grid.data, req.user.pin, function(err) {
-    //     if (err) {
-    //         console.log("error sending grid and pin email")
-    //         next(err)
-    //     } else {
-    //         console.log('done sending email')
-    //     }
-    // })
-})
+    emailer.sendGridAndPinEmail(req.user.email, req.user.grid.toString(), req.user.pin, function(err) {
+        if (err) {
+            console.log("error sending grid and pin email")
+            next(err)
+        } else {
+            res.end("Thank you for registering. A grid and pin has been sent to your email")
+            console.log('grid and pin email sent to ' + req.user.email)
+        }
+    })
+}
 
