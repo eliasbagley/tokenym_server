@@ -37,7 +37,6 @@ app.use(notFoundHandler)
 app.use(errorHandler)
 
 function notFoundHandler(req, res, next) {
-    console.log("not found")
     var err = new Error('Not found')
     err.status = 404
     next(err)
@@ -55,7 +54,7 @@ function loadUser(id, cb) {
 }
 
 function authenticateUser(req, res, next) {
-    var api_key = req.header('X-TKN-ApiKey')
+    var api_key = req.header('X-TOKENYM-AccessToken')
 
     // load the user id from redis, and load the user from mongoose
     client.get(api_key, function (err, userId) {
@@ -73,10 +72,9 @@ function authenticateUser(req, res, next) {
                 })
             } else {
                 next()
-                // console.log('nonexistant api key')
-                // var error = new Error('nonexistant API key')
-                // error.status = 404
-                // next(error)
+                var error = new Error('nonexistant API key')
+                error.status = 404
+                next(error)
             }
         }
     })

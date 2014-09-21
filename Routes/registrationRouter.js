@@ -64,7 +64,7 @@ router.post('/', function(req, res, next) {
 
         }
 
-        res.json({'status' : 1, 'message' : 'Registration link sent to email'})
+        res.json({'status' : true, 'message' : 'Registration link sent to email'})
     })
 })
 

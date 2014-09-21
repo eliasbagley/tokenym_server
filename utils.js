@@ -131,7 +131,7 @@ var secureShuffleString = function secureShuffleString(string, callback) {
 module.exports.randomChars = function getRandomChars(num, callback) {
     secureShuffleString(possible, function(err, result) {
         console.log('got random chars')
-        var randomChars = err ? null : result.substring(0, num-1)
+        var randomChars = err ? null : result.substring(0, num)
         callback(err, randomChars)
     })
 }

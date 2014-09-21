@@ -1,4 +1,5 @@
 var mongoose = require('mongoose')
+var Grid     = require('../Grid')
 
 var userSchema = new mongoose.Schema({
     email: {
@@ -8,7 +9,7 @@ var userSchema = new mongoose.Schema({
     id: {
         type: String,
     },
-    grid: mongoose.Schema.Types.ObjectId,
+    grid: mongoose.Schema.Types.Mixed,
     balance: {
         type: Number,
         default: 100

@@ -5,7 +5,6 @@ var rows = 5
 var cols = 5
 
 function Grid(rows, cols, data) {
-    console.log('inside grid constructor')
     this.rows = rows
     this.cols = cols
     this.data = data
@@ -18,9 +17,8 @@ Grid.create = function(cb) {
 }
 
 Grid.prototype.decode = function(encrypted, random_kb) {
-    console.log('decoding')
     var decrypted = ""
-    if (encrypted.length != random_kb.length) {
+    if (this.data.length != random_kb.length) {
         return null
     }
 
@@ -29,7 +27,7 @@ Grid.prototype.decode = function(encrypted, random_kb) {
         var decodedCharIndex = this.data.indexOf(codedChar)
 
         if (decodedCharIndex > 0) {
-            decrypted += random_kb[ind]
+            decrypted += random_kb[decodedCharIndex]
         }
     }
 
