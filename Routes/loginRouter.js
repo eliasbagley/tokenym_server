@@ -4,6 +4,7 @@ var User = require('../model/user')
 var bcrypt = require('bcrypt-nodejs')
 var redis = require('redis')
 var uuid = require('node-uuid')
+var Grid = require('../Grid')
 
 var client = redis.createClient()
 
@@ -96,10 +97,20 @@ router.post('/', function (req, res, next) {
     // pull user out of request object (loaded from middleware)
     var user = req.user
 
+    // Fail authentication if they don't have a keyboard associated with them
+    if (!req.keyboard) {
+        authenticationFailed(req, res, next)
+        return
+    }
+
     console.log('grid: ' + user.grid)
     console.log('grid len: ' + user.grid.rows)
     // decode the encrypted pin
-    var pin = user.grid.decode(req.body.pin, req.keyboard)
+    console.log('grid data' + user.grid.data)
+    var grid = new Grid(user.grid.rows, user.grid.cols, user.grid.data)
+    console.log('decoding grid')
+    console.log('pin: ' + req.body.pin + ' keyboard: ' + req.keyboard)
+    var pin = grid.decode(req.body.pin, req.keyboard)
     console.log('encoded: ' + req.body.pin + " decoded: " + pin)
 
     // recreate the id
@@ -111,8 +122,8 @@ router.post('/', function (req, res, next) {
 
     // send 403 error if not authenticated
     if (!authenticated) {
-        authenticationFailed(req, res, next)
-        return
+        // authenticationFailed(req, res, next)
+        // return
     }
 
 

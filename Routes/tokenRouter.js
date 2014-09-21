@@ -9,6 +9,7 @@ var router = express.Router()
 module.exports = router
 
 router.post('/request', function(req, res, next) {
+    console.log('generating token')
     utils.generateToken(function(err, token) {
        if (err) {
            next(err)
